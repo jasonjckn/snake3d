@@ -40,7 +40,6 @@
   (map (partial interp factor) src dst))
 
 (def active-clr [0 0.8 0.1])
-#_ (def non-active-clr [.1 0.2 .7])
 
 (defn mouse-drag [[dx dy] [x y] button state]
   (assoc state
@@ -157,6 +156,7 @@
      :left (assoc st :dir [1 0])
      :right (assoc st :dir [-1 0])
      :down (assoc st :dir [0 -1])
+     "r" (def-state)
      _ st)))
 
 (defn update [[delta time] st]
@@ -181,15 +181,7 @@
                (fn [m] (update-in m [:active]
                                   #(min (+ % (* delta 3.5))
                                         max-active))))
-   (gameover-rotate)
-    ))
-    
-  )
-#_ (update [3 1] (def-state))
-#_ (def st (def-state))
-#_ (def delta 3)
-
-#_ (def snapshot @cur-st)
+   (gameover-rotate))))
 
 
 (defn display [[delta time] st]
@@ -211,8 +203,9 @@
      :tail-size 3
      :board (vec (repeat size (vec (repeat size {:active 0.0}))))}))
 
-#_ (app/start 
-    {:display (wrap-exc #'display), :reshape #'reshape, :init (wrap-exc init),
-     :update (wrap-exc #'update) :key-press (wrap-exc #'key-press)
-     :mouse-drag (wrap-exc #'mouse-drag)} 
-    (def-state))
+(defn -main[]
+  (app/start 
+   {:display (wrap-exc #'display), :reshape #'reshape, :init (wrap-exc init),
+    :update (wrap-exc #'update) :key-press (wrap-exc #'key-press)
+    :mouse-drag (wrap-exc #'mouse-drag)} 
+   (def-state)))

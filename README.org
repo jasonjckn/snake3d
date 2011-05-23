@@ -1,8 +1,22 @@
 
-* How to Run
+* Snake3D
+
+The game snake in 3D! Could it get any better?
+
+
+* How to Run?
 lein deps
 lein native-deps
 lein run
+
+* How to play?
+1) Use the arrow keys up, left, right, down to change the direction of the snake.
+2) Eat the yellow food.
+3) Don't try to eat your tail!
+
+
+* How did I build this?
+I built this in the span of 8 hours with essentially zero opengl experience. I was playing around with the library penumbra for clojure and realized how easy it was to build stuff.
 
 
 * Screenshot
