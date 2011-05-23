@@ -18,6 +18,7 @@ lein run
 * How did I build this?
 I built this in the span of 8 hours with essentially zero opengl experience. I was playing around with the library penumbra for clojure and realized how easy it was to build stuff.
 
+Watch my time-lapse: http://www.youtube.com/watch?v=DHARNkMi5Lg
 
 * Screenshot
 [[https://github.com/jasonjckn/snake3d/raw/master/pic.png]]

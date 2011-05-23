@@ -10,6 +10,15 @@
 (defn hit-detection)
 (defn add-food)
 
+(defn def-state []
+  (let [size 10]
+    {:size size :focus [0 0] :dir [0 1] 
+     :rot-x 39, :rot-y 155
+     :tail '([0 0])
+     :tail-size 3
+     :board (vec (repeat size (vec (repeat size {:active 0.0}))))}))
+
+
 (def max-active 0.8)
 
 (defn init [st]
@@ -190,22 +199,15 @@
   (rotate (:rot-y st) 0 1 0)
   (board st)
   (if (:game-over st)
-    (text/write-to-screen "Game Over!" 350 300))
+    (text/write-to-screen "Game Over! (push 'r' to restart)" 350 300))
   (text/write-to-screen (format "%d FPS" (int (/ 1 delta))) 3 1)
   (app/repaint!))
 
-
-(defn def-state []
-  (let [size 10]
-    {:size size :focus [0 0] :dir [0 1] 
-     :rot-x 39, :rot-y 155
-     :tail '([0 0])
-     :tail-size 3
-     :board (vec (repeat size (vec (repeat size {:active 0.0}))))}))
 
 (defn -main[]
   (app/start 
    {:display (wrap-exc #'display), :reshape #'reshape, :init (wrap-exc init),
     :update (wrap-exc #'update) :key-press (wrap-exc #'key-press)
     :mouse-drag (wrap-exc #'mouse-drag)} 
-   (def-state)))
+   (def-state))
+  )
