@@ -14,7 +14,7 @@ lein run
 * How to play?
 1) Use the arrow keys up, left, right, down to change the direction of the snake.
 2) Eat the yellow food.
-3) Don't try to eat your tail!
+3) Don't eat your tail!
 
 
 * How did I build this?
