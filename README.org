@@ -5,9 +5,11 @@ The game snake in 3D! Could it get any better?
 
 
 * How to Run?
+#+BEGIN_SRC: bash
 lein deps
 lein native-deps
 lein run
+#+END_SRC
 
 * How to play?
 1) Use the arrow keys up, left, right, down to change the direction of the snake.
