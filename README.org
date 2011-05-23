@@ -1,0 +1,10 @@
+
+* How to Run
+lein deps
+lein native-deps
+lein run
+
+
+* Screenshot
+[[https://github.com/jasonjckn/snake3d/raw/master/pic.png]]
+
