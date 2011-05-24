@@ -3,12 +3,12 @@
         [util]
         [pallet thread-expr]
         [matchure])
-  (:require [penumbra.app :as app]
-            [penumbra.text :as text]))
+  (:require
+   [cube :as c]
+   [penumbra.app :as app]
+   [penumbra.text :as text]))
 
-(defn cube)
 (defn advance)
-(defn hit-detection)
 (defn add-food)
 
 (defn init-state []
@@ -32,10 +32,14 @@
   (depth-test :lequal)
   (app/periodic-update! 3 (wrap-exc #'advance))
   (app/periodic-update! 0.5 (wrap-exc #'add-food))
-  (def the-cube (create-display-list (cube)))
-  (def the-food-cube (create-display-list (cube :food true)))
-  (def the-red-cube (create-display-list (cube :red true)))
-  (def the-promotion-cube (create-display-list (cube :promotion max-promotion)))
+  (def the-cube (create-display-list
+                 (c/render (c/four-color-cube c/natural-clr))))
+  (def the-food-cube (create-display-list
+                      (c/render (c/solid-color-cube c/food-clr))))
+  (def the-red-cube (create-display-list
+                      (c/render (c/solid-color-cube c/error-clr))))
+  (def the-promotion-cube (create-display-list
+                           (c/render-transition-cube max-promotion)))
   st)
 
 
@@ -44,56 +48,41 @@
   (load-identity)
   st)
 
-(defn interp [factor src dst]
-  (+ src (* factor (- dst src))))
 
-(defn interp-3 [factor src dst]
-  (map (partial interp factor) src dst))
-
-(def promotion-clr [0 0.8 0.1])
 
 (defn mouse-drag [[dx dy] _ _ st]
   (-> st
       (update-in [:rot-x] #(+ dy %))
       (update-in [:rot-y] #(+ dx %))))
 
-(defn cube [& {:keys [promotion red food], :or {promotion 0 red false food false}}]
-  (let [clrf #(apply color (interp-3 promotion %& promotion-clr))
-        clrfr$ #(if red (clrf 0.9 0 0) (apply clrf %&))
-        clrfr #(if food (clrf 0.9 0.9 0) (apply clrfr$ %&))
-        sq (fn [m z]
-             (clrfr 0.1 0.5 0.7) (vertex (m 1 1 z))
-             (clrfr 0 0.1 0.9) (vertex (m -1 1 z))
-             (clrfr 0.2 0.3 0.8) (vertex (m -1 -1 z))
-             (clrfr 0 0.6 0.9) (vertex (m 1 -1 z)))
-        twosq (fn [m]
-              (doseq [z [-1 1]]
-                (sq m z)))]
-    (draw-quads
-     (twosq #(vec [%1 %2 %3]))
-     (twosq #(vec [%3 %2 %1]))
-     (twosq #(vec [%2 %3 %1])))))
-
-(defn board [{:keys [dimensions board game-over]}]
+(defn gen-board [{:keys [dimensions board game-over]} f]
   (let [offset (- (/ dimensions 2))
         rng (range dimensions)]
     (doseq [y rng x rng]
-      (let [{:keys [promotion food]} ((board y) x)
-            promotion-f (+ (/ promotion 2) 1.0)]
+      (let [{:keys [promotion] :as cell} ((board y) x)
+            height-f (/ promotion 2) ]
         (push-matrix
          (translate (+ offset y) 0 (+ offset x))
-         (scale 0.45 (* promotion-f 0.25) 0.45)
-         (cond
-          game-over (if (< promotion 0.1)
-                      (call-display-list the-cube)
-                      (cube :red true))
+         (scale 0.45 (+ 0.45 (* height-f 0.30)) 0.45)
+         (f cell))))))
 
-          food (call-display-list the-food-cube)
+(defn game-over-board [{:keys [promotion]}]
+  (if (< promotion 0.1)
+    (call-display-list the-cube)
+    (call-display-list the-red-cube)))
 
-          (< promotion 0.1) (call-display-list the-cube)
-          (> promotion (- max-promotion 0.1)) (call-display-list the-promotion-cube)
-          (> promotion 0) (cube :promotion promotion))
-         )))))
+(defn play-board [{:keys [food promotion]}]
+  (cond
+   food (call-display-list the-food-cube)
+   
+   (< promotion 0.1) (call-display-list the-cube)
+   (> promotion (- max-promotion 0.1)) (call-display-list the-promotion-cube)
+   (> promotion 0) (c/render-transition-cube promotion)))
+
+(defn board [{:keys [game-over] :as st}]
+  (if game-over
+    (gen-board st game-over-board)
+    (gen-board st play-board)))
 
 
 (defn hit-detection [st]
@@ -119,8 +108,8 @@
                            (first t)
                            old)))
 
-        tail-subset #(if (>= (count %) (:snake-len st))
-                       (drop 1 %) %)
+        tail-subset (fn [t] (if (>= (count t) (:snake-len st))
+                              (drop 1 t) t))
 
         eat-food (fn-st
                   (let-with-arg-> st [food-addr (concat [:board] (:snake-head st) [:food])]
@@ -153,33 +142,38 @@
 
 (def cur-st (atom {})) ;; DEBUG
 
-(defn update [[delta time] st]
+(concat nil nil [:a])
+
+(defn update [[dt time] st]
   (swap! cur-st (fn [_] st)) ;; DEBUG
 
   (let [bound-promotion (fn [v] (min (max v 0) max-promotion))
-        
-        cell-promotion (fn [st op cell-addr]
-                         (-> st
-                             (when-> cell-addr
-                                     (update-in (concat [:board] cell-addr [:promotion])
-                                                #(bound-promotion (op % (* delta 3.5)))))))
 
-        spin-camera (fn-st (update-in [:rot-y] #(+ (* 15 delta) %)))]
+        update-promotion (fn [st addr f]
+                           (-> st (when-> addr
+                                          (update-in (concat [:board] addr [:promotion])
+                                                     (comp bound-promotion f)))))
+        
+        spin-camera (fn-st (update-in [:rot-y] #(+ (* 15 dt) %)))]
+
+    
+    
     (-> st
-        (cell-promotion - (:snake-tail st))
-        (cell-promotion + (:snake-head st))
+        (update-promotion (:snake-tail st) #(- % (* dt 3.5)))
+        (update-promotion (:snake-head st) #(+ % (* dt 3.5)))
+
         (when-> (:game-over st)
                 (spin-camera)))))
 
 
-(defn display [[delta time] st]
+(defn display [[dt time] st]
   (translate 0 1 -12)
   (rotate (:rot-x st) 1 0 0)
   (rotate (:rot-y st) 0 1 0)
   (board st)
   (if (:game-over st)
     (text/write-to-screen "Game Over! (push 'r' to restart)" 350 300))
-  (text/write-to-screen (format "%d FPS" (int (/ 1 delta))) 3 1)
+  (text/write-to-screen (format "%d FPS" (int (/ 1 dt))) 3 1)
   (app/repaint!))
 
 

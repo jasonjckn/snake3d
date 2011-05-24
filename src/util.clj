@@ -19,4 +19,3 @@
     (recur (v (first ks)) (rest ks))
     v))
 
-
