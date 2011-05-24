@@ -93,7 +93,7 @@
 
 (defn add-food [st]
   (let [rnd (fn [] (rand-int (:dimensions st)))
-        food-loc (repeat 2 (rnd))]
+        food-loc [(rnd) (rnd)]]
     (assoc-in st (concat [:board] food-loc [:food]) true)))
 
 (defn advance [st]
@@ -175,7 +175,6 @@
     (text/write-to-screen "Game Over! (push 'r' to restart)" 350 300))
   (text/write-to-screen (format "%d FPS" (int (/ 1 dt))) 3 1)
   (app/repaint!))
-
 
 (defn -main []
   (app/start 
