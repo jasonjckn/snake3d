@@ -1,7 +1,8 @@
 (ns core
-  (:use [penumbra opengl])
-  (:use [util])
-  (:use [matchure])
+  (:use [penumbra opengl]
+        [util]
+        [pallet thread-expr]
+        [matchure])
   (:require [penumbra.app :as app]
             [penumbra.text :as text]))
 
@@ -10,16 +11,19 @@
 (defn hit-detection)
 (defn add-food)
 
-(defn def-state []
-  (let [size 10]
-    {:size size :focus [0 0] :dir [0 1] 
+(defn init-state []
+  (let [d 10]
+    {:dimensions d
      :rot-x 39, :rot-y 155
-     :tail '([0 0])
-     :tail-size 3
-     :board (vec (repeat size (vec (repeat size {:active 0.0}))))}))
+
+     :snake-head [0 0] :snake-tail nil :snake-dir [0 1] 
+     :snake-body [[0 0]]
+     :snake-len 3
+
+     :board (vec (repeat d (vec (repeat d {:promotion 0.0}))))}))
 
 
-(def max-active 0.8)
+(def max-promotion 0.8)
 
 (defn init [st]
   (app/vsync! true)
@@ -31,14 +35,12 @@
   (def the-cube (create-display-list (cube)))
   (def the-food-cube (create-display-list (cube :food true)))
   (def the-red-cube (create-display-list (cube :red true)))
-  (def the-active-cube (create-display-list (cube :active max-active)))
+  (def the-promotion-cube (create-display-list (cube :promotion max-promotion)))
   st)
 
 
 (defn reshape [[x y width height] st]
   (frustum-view 60.0 (/ (double width) height) 1.0 100.0)
-  (def width width)
-  (def height height)
   (load-identity)
   st)
 
@@ -48,15 +50,15 @@
 (defn interp-3 [factor src dst]
   (map (partial interp factor) src dst))
 
-(def active-clr [0 0.8 0.1])
+(def promotion-clr [0 0.8 0.1])
 
-(defn mouse-drag [[dx dy] [x y] button state]
-  (assoc state
-    :rot-x (+ (:rot-x state) dy)
-    :rot-y (+ (:rot-y state) dx)))
+(defn mouse-drag [[dx dy] _ _ st]
+  (-> st
+      (update-in [:rot-x] #(+ dy %))
+      (update-in [:rot-y] #(+ dx %))))
 
-(defn cube [& {:keys [active red food], :or {active 0 red false food false}}]
-  (let [clrf #(apply color (interp-3 active %& active-clr))
+(defn cube [& {:keys [promotion red food], :or {promotion 0 red false food false}}]
+  (let [clrf #(apply color (interp-3 promotion %& promotion-clr))
         clrfr$ #(if red (clrf 0.9 0 0) (apply clrf %&))
         clrfr #(if food (clrf 0.9 0.9 0) (apply clrfr$ %&))
         sq (fn [m z]
@@ -72,125 +74,102 @@
      (twosq #(vec [%3 %2 %1]))
      (twosq #(vec [%2 %3 %1])))))
 
-(defn board [{:keys [size board game-over]}]
-  (let [offset (- (/ size 2))
-        rng (range size)]
+(defn board [{:keys [dimensions board game-over]}]
+  (let [offset (- (/ dimensions 2))
+        rng (range dimensions)]
     (doseq [y rng x rng]
-      (let [{:keys [active food]} ((board y) x)
-            active-f (+ (/ active 2) 1.0)]
+      (let [{:keys [promotion food]} ((board y) x)
+            promotion-f (+ (/ promotion 2) 1.0)]
         (push-matrix
          (translate (+ offset y) 0 (+ offset x))
-         (scale 0.45 (* active-f 0.25) 0.45)
+         (scale 0.45 (* promotion-f 0.25) 0.45)
          (cond
-          
-          game-over (if (< active 0.1)
+          game-over (if (< promotion 0.1)
                       (call-display-list the-cube)
-                     #_ (call-display-list the-red-cube)
-                     (cube :red true)
-                      )
+                      (cube :red true))
+
           food (call-display-list the-food-cube)
-          (< active 0.1) (call-display-list the-cube)
-          (> active (- max-active 0.1)) (call-display-list the-active-cube)
-          (> active 0) (cube :active active))
-         #_ (cond
-          (< active 0.1) (cube)
-          (> active (- max-active 0.1)) (cube :active max-active)
-          (> active 0) (cube :active active))
+
+          (< promotion 0.1) (call-display-list the-cube)
+          (> promotion (- max-promotion 0.1)) (call-display-list the-promotion-cube)
+          (> promotion 0) (cube :promotion promotion))
          )))))
 
-(def cur-st (atom {}))
-#_ @cur-st
 
 (defn hit-detection [st]
-  (let [tail (:tail st)
-        tail-dupes? (not= (count tail)
-                           (count (set tail)))]
-    (if tail-dupes?
-      (assoc st :game-over true)
-      st)))
+  (let [dupes? #(not= (count %) (count (set %)))]
+    (-> st
+        (when-> (dupes? (:snake-body st))
+                (assoc :game-over true)))))
 
 (defn add-food [st]
-  (let [tail (set (:tail st))
-        rnd (fn [] (rand-int (:size st)))
+  (let [rnd (fn [] (rand-int (:dimensions st)))
         food-loc (repeat 2 (rnd))]
-    (update-in st (concat [:board] food-loc [:food]) (fn [_] true))))
+    (assoc-in st (concat [:board] food-loc [:food]) true)))
 
 (defn advance [st]
-  (let [move-focus (fn [old]
-                     (let [ubound (- (:size st) 1)]
-                       (map max [0 0]
-                            (map min [ubound ubound]
-                                 (map + old (:dir st))))))
-        move-unfocus (fn [old]
-                       (let [t (:tail st)]
-                         (if (>= (count t) (:tail-size st))
+  (let [apply-bounds (fn [addr] (let [ubound (- (:dimensions st) 1)]
+                                  (map max [0 0] (map min [ubound ubound] addr))))
+        
+        advance-head (fn [addr] (apply-bounds (map + addr (:snake-dir st))))
+
+        advance-tail (fn [old]
+                       (let [t (:snake-body st)]
+                         (if (>= (count t) (:snake-len st))
                            (first t)
                            old)))
-        ]
 
-    (let [tail-size (:tail-size st)
-          tail-subset #(if (>= (count %) tail-size)
-                          (drop 1 %)
-                          %)
-          eat-food (fn [st]
-                     (let [f (:focus st)
-                           addr (concat [:board] f [:food])]
-                       
-                       (-> st
-                           (update-in addr (fn [o] (def o o) false))
-                           (update-in [:tail-size] #(if o (+ 1 %) %)))))
+        tail-subset #(if (>= (count %) (:snake-len st))
+                       (drop 1 %) %)
 
-          update-tail (fn [st]
-                         (update-in st [:tail]
-                                    #(concat (tail-subset %) [(:focus st)])))]
-      (if-not (:game-over st)
-        (-> st
-            (update-in [:focus] move-focus)
-            (update-in [:unfocus] move-unfocus)
-            (update-tail)
-            (hit-detection)
-            (eat-food)
-            )
-        st))))
+        eat-food (fn-st
+                  (let-with-arg-> st [food-addr (concat [:board] (:snake-head st) [:food])]
+                    (when-> (select-in st food-addr)
+                            (update-in [:snake-len] #(+ 1 %)))
+                    (assoc-in food-addr false)))
+
+        update-body (fn [st]
+                      (update-in st [:snake-body]
+                                 #(concat (tail-subset %) [(:snake-head st)])))]
+
+    (-> st
+        (when-not-> (:game-over st)
+                    (update-in [:snake-head] advance-head)
+                    (update-in [:snake-tail] advance-tail)
+                    (update-body)
+                    (hit-detection)
+                    (eat-food)))))
 
 
 (defn key-press [key st]
-  (let [dir {:north [0 1]
-             :east [-1 0]
-             :west [1 0]}]
-    (println key)
-    (cond-match
-     key
-     :up (assoc st :dir [0 1])
-     :left (assoc st :dir [1 0])
-     :right (assoc st :dir [-1 0])
-     :down (assoc st :dir [0 -1])
-     "r" (def-state)
-     _ st)))
+  (cond-match key
+              :up (assoc st :snake-dir [0 1])
+              :left (assoc st :snake-dir [1 0])
+              :right (assoc st :snake-dir [-1 0])
+              :down (assoc st :snake-dir [0 -1])
+              "r" (init-state)
+              _ st))
+
+
+(def cur-st (atom {})) ;; DEBUG
 
 (defn update [[delta time] st]
-  (swap! cur-st (fn [_] st))
-  (let [uf (:unfocus st)
-        f (:focus st)
+  (swap! cur-st (fn [_] st)) ;; DEBUG
 
-        maybe-unfocus (fn [st]
-                        (if uf
-                          (update-in st
-                                     (concat [:board] uf [:active])
-                                             #(max (- % (* delta 3.5)) 0))
-                          st))
-        gameover-rotate (fn [st]
-                          (if (:game-over st)
-                            (update-in st [:rot-y] #(+ (* 15 delta) %))
-                            st))
-        ]
-  (-> st
-      (maybe-unfocus)
-    (update-in (concat [:board] f)
-               (fn [m] (update-in m [:active]
-                                  #(min (+ % (* delta 3.5))
-                                        max-active))))
-   (gameover-rotate))))
+  (let [bound-promotion (fn [v] (min (max v 0) max-promotion))
+        
+        cell-promotion (fn [st op cell-addr]
+                         (-> st
+                             (when-> cell-addr
+                                     (update-in (concat [:board] cell-addr [:promotion])
+                                                #(bound-promotion (op % (* delta 3.5)))))))
+
+        spin-camera (fn-st (update-in [:rot-y] #(+ (* 15 delta) %)))]
+    (-> st
+        (cell-promotion - (:snake-tail st))
+        (cell-promotion + (:snake-head st))
+        (when-> (:game-over st)
+                (spin-camera)))))
 
 
 (defn display [[delta time] st]
@@ -204,10 +183,10 @@
   (app/repaint!))
 
 
-(defn -main[]
+(defn -main []
   (app/start 
    {:display (wrap-exc #'display), :reshape #'reshape, :init (wrap-exc init),
     :update (wrap-exc #'update) :key-press (wrap-exc #'key-press)
     :mouse-drag (wrap-exc #'mouse-drag)} 
-   (def-state))
+   (init-state))
   )

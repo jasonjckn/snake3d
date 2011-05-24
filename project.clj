@@ -3,6 +3,7 @@
                  [org.clojure/clojure-contrib "1.2.0"]
 
                  [matchure "0.10.1"]
+                 [org.clojars.jasonjckn/thread-expr "1.0.0"]
 
                  [slick-util "1.0.0"]
                  [cantor "0.2.1"]
