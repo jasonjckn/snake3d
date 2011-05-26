@@ -12,26 +12,29 @@
 
 (defn advance)
 (defn add-food)
+(def max-promotion 0.8)
 
+
+(defnl simple-state []
+  {:dimensions d
+   :rot-x 39, :rot-y 155
+
+   :snake-head [0 0] :snake-tail nil :snake-dir [0 1] 
+   :snake-body [[0 0]] :snake-len 3
+
+   :board (vec (repeat d (vec (repeat d {:promotion 0.0}))))}
+  :where [d 10])
 
 (defnl initial-state []
-  (-> {:dimensions d
-       :rot-x 39, :rot-y 155
-
-       :snake-head [0 0] :snake-tail nil :snake-dir [0 1] 
-       :snake-body [[0 0]] :snake-len 3
-
-       :board (vec (repeat d (vec (repeat d {:promotion 0.0}))))}
-
+  (-> (simple-state)
       (register-all-meshes))
   :where
-  [d 10
-   register-all-meshes (fn-st
-                        (c/register-mesh :natural (c/four-color-cube c/natural-clr))
-                        (c/register-mesh :food (c/solid-color-cube c/food-clr))
-                        (c/register-mesh :error (c/solid-color-cube c/error-clr))
+  [register-all-meshes (fn-st
+                        (c/register-mesh :natural (c/four-color-cube l/natural-clr))
+                        (c/register-mesh :food (c/solid-color-cube l/food-clr))
+                        (c/register-mesh :error (c/solid-color-cube l/error-clr))
                         (c/register-mesh :promo (c/four-color-cube
-                                                 (transition-clr max-promotion))))])
+                                                 (l/transition-clr max-promotion))))])
 
 (defn init [st]
   (enable :depth-test)
@@ -66,15 +69,15 @@
           rng (range dimensions)])
 
 (defn game-over-board [st {:keys [promotion]}]
-  (render-mesh st
+  (c/render-mesh st
    (if (< promotion 0.1) :natural :error)))
 
 (defnl play-board [st {:keys [food promotion]}]
   (cond
-   food (render-mesh st :food)
+   food (c/render-mesh st :food)
    
-   (< promotion 0.1) (render-mesh st :natural)
-   (> promotion (- max-promotion 0.1)) (render-mesh st :promo)
+   (< promotion 0.1) (c/render-mesh st :natural)
+   (> promotion (- max-promotion 0.1)) (c/render-mesh st :promo)
    (> promotion 0) (render-growing-cube promotion))
 
   :where
@@ -94,16 +97,17 @@
 
 (defnl add-food [st]
   (assoc-in st `(:board ~@random-coords :food) true)
+  :where
+  [rnd (fn [] (rand-int (:dimensions st)))
+   random-coords [(rnd) (rnd)]])
 
-  :where [rnd (fn [] (rand-int (:dimensions st)))
-          
-          random-coords [(rnd) (rnd)]])
 
 (defnl advance [st]
   (-> st
       (when-not-> (:game-over st)
                   (update-in [:snake-head] advance-head)
                   (update-in [:snake-tail] advance-tail)
+
                   (update-body)
                   (hit-detection)
                   (eat-food)))
