@@ -139,12 +139,11 @@
 
 (defnl key-press [key st]
   (cond-match key
-              :up (assoc st :snake-dir [0 1])
-              :left (assoc st :snake-dir [1 0])
-              :right (assoc st :snake-dir [-1 0])
-              :down (assoc st :snake-dir [0 -1])
+              :up (dir 0 1) :down (dir 0 -1)
+              :left (dir 1 0) :right (dir -1 0)
               "r" (initial-state)
-              _ st))
+              _ st)
+  :where [dir #(assoc st :snake-dir %&)])
 
 
 (def cur-st (atom {})) ;; DEBUG
