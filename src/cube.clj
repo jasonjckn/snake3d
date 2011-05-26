@@ -1,11 +1,7 @@
 (ns cube
-  (:use [penumbra opengl]))
-
-(defn interp [factor src dst]
-  (+ src (* factor (- dst src))))
-
-(defn interp-3 [factor src dst]
-  (map (partial interp factor) src dst))
+  (:use
+   [util]
+   [penumbra opengl]))
 
 (def cube-vertex (read-string (slurp "cube.vertex")))
 
@@ -19,18 +15,17 @@
         add-4-colors (fn [vertices] (map merge colors vertices))]
     (flatten (map add-4-colors (partition 4 cube-vertex)))))
 
-(def error-clr [0.9 0 0])
-(def food-clr [0.9 0.9 0])
-(def natural-clr [[0.1 0.5 0.7] [0 0.1 0.9] [0.2 0.3 0.8] [0 0.6 0.9]])
-(def snake-clr [0 0.8 0.1])
-(defn transition-clr [p] (map #(interp-3 p % snake-clr) natural-clr))
 
 (defn render [mesh]
   (draw-quads
    (doseq [m mesh]
      (color (:color m)) (vertex (:vertex m)))))
 
-(defn render-transition-cube [promotion]
-  (render (four-color-cube (transition-clr promotion))))
+(defnl register-mesh [st kw mesh]
+  (assoc-in st [:meshes kw] gl-list)
+  :where
+  [gl-list (create-display-list (render mesh))])
 
+(defnl render-mesh [st kw]
+  (call-display-list (kw (:meshes st))))
 
