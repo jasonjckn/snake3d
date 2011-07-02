@@ -6,8 +6,6 @@ The game snake in 3D! Could it get any better?
 
 * How to Run?
 #+BEGIN_SRC: bash
-lein deps
-lein native-deps
 lein run
 #+END_SRC
 
